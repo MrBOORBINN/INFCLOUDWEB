@@ -209,8 +209,9 @@ export function startResumableUpload(options: ResumableUploadOptions): Resumable
         }),
       });
 
-      if (!initResp.ok) {
-        throw new Error(`Upload initialization failed with HTTP ${initResp.status}`);
+      const cType = initResp.headers.get('content-type') || '';
+      if (!initResp.ok || cType.includes('text/html')) {
+        throw new Error(`Upload initialization endpoint unavailable (HTTP ${initResp.status})`);
       }
 
       const initData = await initResp.json();

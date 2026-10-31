@@ -68,9 +68,20 @@ export type UploadCancelFn = (() => void) & {
 };
 
 /**
+ * Detects if the application is running in a static Netlify CDN deployment.
+ */
+export function isNetlifyEnvironment(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.location.hostname.includes('netlify.app') ||
+    window.location.hostname.includes('.netlify.')
+  );
+}
+
+/**
  * Uploads a file using the ultra-reliable Resumable Chunked Upload Engine.
  * Supports multi-gigabyte files with zero memory strain, server byte offset resumption,
- * and seamless fallback to Firebase Cloud Storage.
+ * and seamless direct Firebase Cloud Storage on Netlify networks.
  */
 export function uploadFileWithFallback(
   userId: string,
@@ -92,56 +103,13 @@ export function uploadFileWithFallback(
 
   let isCancelled = false;
   let activeFirebaseTask: any = null;
+  let controller: ResumableUploadController | null = null;
 
-  // Primary: Chunked Resumable Upload via Dedicated Server Storage Node
-  const controller = startResumableUpload({
-    userId,
-    file,
-    storageKey,
-    parentFolderId: options?.parentFolderId,
-    isVault: options?.isVault,
-    existingUploadId: options?.existingUploadId,
-    onProgress,
-    onStatusChange: options?.onStatusChange,
-    onSuccess: async (result) => {
-      // Cache small files (< 25MB) in IndexedDB for instant preview
-      if (file.size < 25 * 1024 * 1024) {
-        await putIDBObject(storageKey, file, file.type || 'application/octet-stream');
-      }
-      onSuccess(result);
-    },
-    onError: (err) => {
-      if (isCancelled) {
-        onError(new Error('Upload canceled'));
-        return;
-      }
-      console.warn('Chunked server upload failed, attempting Firebase Storage fallback...', err.message);
-      uploadViaFirebase();
-    },
-  });
-
-  const cancelFn: UploadCancelFn = () => {
-    isCancelled = true;
-    controller.cancel();
-    if (activeFirebaseTask && typeof activeFirebaseTask.cancel === 'function') {
-      try {
-        activeFirebaseTask.cancel();
-      } catch {
-        // ignore
-      }
-    }
-  };
-
-  cancelFn.pause = () => controller.pause();
-  cancelFn.resume = () => controller.resume();
-  cancelFn.cancel = () => controller.cancel();
-  cancelFn.retry = () => controller.retry();
-  cancelFn.uploadId = controller.uploadId;
-
-  // Secondary: Firebase Cloud Storage Upload (uploadBytesResumable)
+  // Secondary/Direct: Firebase Cloud Storage Upload (uploadBytesResumable)
   const uploadViaFirebase = () => {
     if (isCancelled) return;
     try {
+      options?.onStatusChange?.('uploading', isNetlifyEnvironment() ? 'Netlify Cloud Edge Uploading...' : 'Firebase Cloud Syncing...');
       const fileRef = ref(storage, storageKey);
       activeFirebaseTask = uploadBytesResumable(fileRef, file, {
         contentType: file.type || 'application/octet-stream',
@@ -151,6 +119,11 @@ export function uploadFileWithFallback(
         },
       });
 
+      let lastBytes = 0;
+      let lastTime = Date.now();
+      let smoothSpeed = 'Direct Cloud Uplink...';
+      const startTime = Date.now();
+
       activeFirebaseTask.on(
         'state_changed',
         (snapshot: any) => {
@@ -158,14 +131,39 @@ export function uploadFileWithFallback(
           const current = snapshot.bytesTransferred;
           const total = snapshot.totalBytes;
           const progress = total > 0 ? Math.min(99, Math.round((current / total) * 100)) : 0;
+
+          const now = Date.now();
+          const timeDelta = (now - lastTime) / 1000;
+          if (timeDelta >= 0.5) {
+            const bytesDelta = current - lastBytes;
+            const rate = bytesDelta / timeDelta;
+            lastBytes = current;
+            lastTime = now;
+            if (rate > 1024 * 1024) {
+              smoothSpeed = `${(rate / (1024 * 1024)).toFixed(1)} MB/s`;
+            } else if (rate > 1024) {
+              smoothSpeed = `${Math.round(rate / 1024)} KB/s`;
+            }
+          }
+
+          let etaFormatted = '~';
+          if (current > 0 && total > current) {
+            const totalElapsed = (now - startTime) / 1000;
+            const avgSpeed = current / (totalElapsed || 1);
+            if (avgSpeed > 0) {
+              const remainingSecs = Math.round((total - current) / avgSpeed);
+              etaFormatted = remainingSecs < 60 ? `~${remainingSecs}s` : `~${Math.ceil(remainingSecs / 60)}m`;
+            }
+          }
+
           onProgress({
             bytesTransferred: current,
             totalBytes: total,
             progress,
-            speedFormatted: 'Firebase Sync...',
+            speedFormatted: smoothSpeed,
             tmbFormatted: formatTMB(current, total),
-            networkType: getNetworkType(),
-            etaFormatted: '~',
+            networkType: isNetlifyEnvironment() ? 'Netlify Edge · Firebase CDN' : getNetworkType(),
+            etaFormatted,
           });
         },
         async (firebaseError: any) => {
@@ -173,12 +171,13 @@ export function uploadFileWithFallback(
             onError(new Error('Upload canceled by user.'));
             return;
           }
-          console.warn('Firebase Storage error, activating resilient private IndexedDB storage:', firebaseError.message);
+          console.warn('Firebase Storage notice, activating resilient IndexedDB storage:', firebaseError.message);
           fallbackToIndexedDB();
         },
         async () => {
           if (isCancelled) return;
           try {
+            options?.onStatusChange?.('completed', 'Upload complete');
             const downloadUrl = await getDownloadURL(activeFirebaseTask.snapshot.ref);
             if (file.size < 25 * 1024 * 1024) {
               await putIDBObject(storageKey, file, file.type || 'application/octet-stream');
@@ -198,6 +197,93 @@ export function uploadFileWithFallback(
       fallbackToIndexedDB();
     }
   };
+
+  // If on Netlify static host, skip local server attempts and stream directly to Firebase Cloud Storage
+  if (isNetlifyEnvironment()) {
+    uploadViaFirebase();
+  } else {
+    // Primary on local dev/dedicated server: Node.js chunked streaming
+    controller = startResumableUpload({
+      userId,
+      file,
+      storageKey,
+      parentFolderId: options?.parentFolderId,
+      isVault: options?.isVault,
+      existingUploadId: options?.existingUploadId,
+      onProgress,
+      onStatusChange: options?.onStatusChange,
+      onSuccess: async (result) => {
+        if (file.size < 25 * 1024 * 1024) {
+          await putIDBObject(storageKey, file, file.type || 'application/octet-stream');
+        }
+        onSuccess(result);
+      },
+      onError: (err) => {
+        if (isCancelled) {
+          onError(new Error('Upload canceled'));
+          return;
+        }
+        console.warn('Dedicated node upload unavailable, streaming via Firebase Cloud Storage...', err.message);
+        uploadViaFirebase();
+      },
+    });
+  }
+
+  const cancelFn: UploadCancelFn = () => {
+    isCancelled = true;
+    if (activeFirebaseTask && typeof activeFirebaseTask.cancel === 'function') {
+      try {
+        activeFirebaseTask.cancel();
+      } catch {
+        // ignore
+      }
+    }
+    if (controller) {
+      controller.cancel();
+    }
+  };
+
+  cancelFn.pause = async () => {
+    if (activeFirebaseTask && typeof activeFirebaseTask.pause === 'function') {
+      activeFirebaseTask.pause();
+      options?.onStatusChange?.('paused', 'Upload paused');
+    } else if (controller) {
+      await controller.pause();
+    }
+  };
+
+  cancelFn.resume = async () => {
+    if (activeFirebaseTask && typeof activeFirebaseTask.resume === 'function') {
+      activeFirebaseTask.resume();
+      options?.onStatusChange?.('uploading', 'Resuming upload...');
+    } else if (controller) {
+      await controller.resume();
+    }
+  };
+
+  cancelFn.cancel = async () => {
+    isCancelled = true;
+    if (activeFirebaseTask && typeof activeFirebaseTask.cancel === 'function') {
+      try {
+        activeFirebaseTask.cancel();
+      } catch {
+        // ignore
+      }
+    }
+    if (controller) {
+      await controller.cancel();
+    }
+  };
+
+  cancelFn.retry = async () => {
+    if (controller) {
+      await controller.retry();
+    } else {
+      uploadViaFirebase();
+    }
+  };
+
+  cancelFn.uploadId = controller?.uploadId || storageKey;
 
   // Tertiary: Resilient Local Object Storage (IndexedDB)
   const fallbackToIndexedDB = async () => {
@@ -263,15 +349,19 @@ export function removeSessionFile(id: string): void {
  * Dynamically resolves permanent Cloud Storage or Server URL
  */
 export async function getStorageUrl(storageKey: string): Promise<string | null> {
-  // Check if available on server
-  try {
-    const serverUrl = `/api/storage/files/${encodeURIComponent(storageKey)}`;
-    const check = await fetch(serverUrl, { method: 'HEAD' });
-    if (check.ok) {
-      return serverUrl;
+  // If running on Netlify, bypass local server probing and resolve directly via Firebase
+  if (!isNetlifyEnvironment()) {
+    try {
+      const serverUrl = `/api/storage/files/${encodeURIComponent(storageKey)}`;
+      const check = await fetch(serverUrl, { method: 'HEAD' });
+      const cType = check.headers.get('content-type') || '';
+      // Only treat as server file if response is OK AND not the Netlify SPA HTML fallback
+      if (check.ok && !cType.includes('text/html')) {
+        return serverUrl;
+      }
+    } catch {
+      // continue
     }
-  } catch {
-    // continue
   }
 
   // Check Firebase Storage

@@ -103,11 +103,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signInWithGoogle = async () => {
     try {
       setAuthError(null);
+      googleProvider.setCustomParameters({ prompt: 'select_account' });
       await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
       console.error('Google Sign-In Error:', err);
-      setAuthError(err.message || 'Google Sign-In failed. Please try again.');
-      throw err;
+      let msg = 'Google Sign-In failed.';
+      if (err.code === 'auth/popup-blocked') {
+        msg = 'Sign-in popup was blocked by your browser. Please allow popups for this site and click Continue with Google.';
+      } else if (err.code === 'auth/popup-closed-by-user') {
+        msg = 'Sign-in window closed before completion. Please try again.';
+      } else if (err.code === 'auth/cancelled-popup-request') {
+        msg = 'Only one sign-in popup can be active at a time.';
+      } else if (err.code === 'auth/network-request-failed') {
+        msg = 'Network connection failed. Please check your internet connection and try again.';
+      } else if (err.message) {
+        msg = err.message;
+      }
+      setAuthError(msg);
+      throw new Error(msg);
     }
   };
 
@@ -118,10 +131,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err: any) {
       console.error('Email Sign-In Error:', err);
       let friendlyMessage = 'Sign in failed.';
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+      if (err.code === 'auth/operation-not-allowed') {
+        friendlyMessage = 'Email/Password sign-in is disabled in this Firebase project. Please click "Continue with Google" for instant sign-in, or enable Email/Password under Firebase Console > Authentication > Sign-in method.';
+      } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
         friendlyMessage = 'Invalid email or password. Please verify credentials.';
       } else if (err.code === 'auth/too-many-requests') {
         friendlyMessage = 'Too many attempts. Please try again later or reset password.';
+      } else if (err.code === 'auth/network-request-failed') {
+        friendlyMessage = 'Network connection failed. Please check your internet connection.';
       } else if (err.message) {
         friendlyMessage = err.message;
       }
@@ -140,12 +157,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err: any) {
       console.error('Sign-Up Error:', err);
       let friendlyMessage = 'Sign up failed.';
-      if (err.code === 'auth/email-already-in-use') {
+      if (err.code === 'auth/operation-not-allowed') {
+        friendlyMessage = 'Email/Password accounts are disabled in this Firebase project. Please click "Continue with Google" for instant access, or enable Email/Password under Firebase Console > Authentication > Sign-in method.';
+      } else if (err.code === 'auth/email-already-in-use') {
         friendlyMessage = 'An account with this email already exists.';
       } else if (err.code === 'auth/weak-password') {
         friendlyMessage = 'Password should be at least 6 characters.';
       } else if (err.code === 'auth/invalid-email') {
         friendlyMessage = 'Please enter a valid email address.';
+      } else if (err.code === 'auth/network-request-failed') {
+        friendlyMessage = 'Network connection failed. Please check your internet connection.';
       } else if (err.message) {
         friendlyMessage = err.message;
       }
