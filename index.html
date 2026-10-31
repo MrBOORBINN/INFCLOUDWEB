@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <script>
+      // Gracefully handle Vite HMR WebSocket notices in container preview environments
+      (function() {
+        var origConsoleError = console.error;
+        console.error = function() {
+          var args = Array.prototype.slice.call(arguments);
+          var msg = args.map(function(item) {
+            return item && item.message ? item.message : String(item);
+          }).join(' ');
+          if (
+            msg.indexOf('WebSocket') !== -1 ||
+            msg.indexOf('closed without opened') !== -1 ||
+            msg.indexOf('[vite]') !== -1
+          ) {
+            return; // Ignore Vite dev WebSocket proxy notices per environment constraint
+          }
+          origConsoleError.apply(console, args);
+        };
+        window.addEventListener('error', function(event) {
+          if (
+            event.message &&
+            (event.message.includes('WebSocket') ||
+             event.message.includes('closed without opened') ||
+             (event.filename && event.filename.includes('@vite/client')))
+          ) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        }, true);
+        window.addEventListener('unhandledrejection', function(event) {
+          if (event.reason && (String(event.reason).includes('WebSocket') || String(event.reason?.message).includes('WebSocket'))) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        }, true);
+      })();
+    </script>
+    <title>INFCLOUD - High-Capacity Cloud Storage</title>
+    <meta name="description" content="A high-capacity, secure cloud storage web application featuring real-time file management, preview, sharing, and intelligent quota monitoring." />
+    <meta property="og:title" content="INFCLOUD - High-Capacity Cloud Storage" />
+    <meta property="og:description" content="A high-capacity, secure cloud storage web application featuring real-time file management, preview, sharing, and intelligent quota monitoring." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#09090b" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="INFCLOUD" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+  </head>
+  <body class="bg-[#09090b] text-zinc-100 antialiased selection:bg-zinc-700 selection:text-white min-h-screen">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

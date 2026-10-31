@@ -1,0 +1,14 @@
+{
+  "uploadId": "upl_1793260412543_ghy6tmc",
+  "filename": "unnamed_file",
+  "storageKey": "users/test_user_qa/files/qa_verification_test.bin",
+  "mimeType": "application/octet-stream",
+  "fileSize": 2500000,
+  "userId": "test_user_qa",
+  "chunkSize": 4194304,
+  "totalChunks": 1,
+  "bytesReceived": 0,
+  "chunksReceived": [],
+  "createdAt": "2026-10-29T07:53:32.543Z",
+  "lastActivityAt": "2026-10-29T07:53:32.543Z"
+}

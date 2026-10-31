@@ -1,0 +1,144 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile, configuration, and storage quota state",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "displayName": { "type": "string", "maxLength": 128 },
+        "photoURL": { "type": "string", "maxLength": 512 },
+        "maxQuotaBytes": { "type": "number" },
+        "usedBytes": { "type": "number" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "maxQuotaBytes", "usedBytes", "createdAt", "updatedAt"]
+    },
+    "FileRecord": {
+      "title": "FileRecord",
+      "description": "Metadata for an uploaded file",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 256 },
+        "originalName": { "type": "string", "maxLength": 256 },
+        "storageKey": { "type": "string", "maxLength": 512 },
+        "mimeType": { "type": "string", "maxLength": 128 },
+        "size": { "type": "number" },
+        "parentFolderId": { "type": "string", "maxLength": 128 },
+        "starred": { "type": "boolean" },
+        "isTrashed": { "type": "boolean" },
+        "trashedAt": { "type": "string", "format": "date-time" },
+        "downloadUrl": { "type": "string", "maxLength": 2048 },
+        "storageProvider": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "name", "storageKey", "mimeType", "size", "starred", "isTrashed", "createdAt", "updatedAt"]
+    },
+    "Folder": {
+      "title": "Folder",
+      "description": "Folder hierarchy container",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 256 },
+        "parentFolderId": { "type": "string", "maxLength": 128 },
+        "color": { "type": "string", "maxLength": 32 },
+        "isTrashed": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "name", "isTrashed", "createdAt", "updatedAt"]
+    },
+    "Share": {
+      "title": "Share",
+      "description": "Cryptographically keyed public/private share link record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "fileId": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "shareToken": { "type": "string", "maxLength": 128 },
+        "fileName": { "type": "string", "maxLength": 256 },
+        "fileSize": { "type": "number" },
+        "mimeType": { "type": "string", "maxLength": 128 },
+        "storageKey": { "type": "string", "maxLength": 512 },
+        "downloadUrl": { "type": "string", "maxLength": 2048 },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "isPasswordProtected": { "type": "boolean" },
+        "passwordHash": { "type": "string", "maxLength": 128 },
+        "accessCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "fileId", "ownerId", "shareToken", "fileName", "fileSize", "mimeType", "isPasswordProtected", "accessCount", "createdAt"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "User storage operation audit log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "action": { "type": "string", "maxLength": 64 },
+        "targetName": { "type": "string", "maxLength": 256 },
+        "targetType": { "type": "string", "maxLength": 32 },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "details": { "type": "string", "maxLength": 512 }
+      },
+      "required": ["id", "userId", "action", "targetName", "targetType", "timestamp"]
+    },
+    "Package": {
+      "title": "Package",
+      "description": "Multi-file structured package shared via unique 8-character access code",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 256 },
+        "description": { "type": "string", "maxLength": 1024 },
+        "accessCode": { "type": "string", "minLength": 8, "maxLength": 8, "pattern": "^(?=.*[0-9]{3})(?=.*[a-z]{5})[a-z0-9]{8}$" },
+        "totalFiles": { "type": "number" },
+        "totalSize": { "type": "number" },
+        "isRevoked": { "type": "boolean" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "accessCount": { "type": "number" },
+        "lastAccessedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "name", "accessCode", "totalFiles", "totalSize", "isRevoked", "accessCount", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profile and quota usage configuration"
+    },
+    "/files/{fileId}": {
+      "schema": { "$ref": "#/entities/FileRecord" },
+      "description": "File metadata records owned by users"
+    },
+    "/folders/{folderId}": {
+      "schema": { "$ref": "#/entities/Folder" },
+      "description": "Folders created by users"
+    },
+    "/shares/{shareId}": {
+      "schema": { "$ref": "#/entities/Share" },
+      "description": "File sharing authorization records"
+    },
+    "/packages/{packageId}": {
+      "schema": { "$ref": "#/entities/Package" },
+      "description": "Structured file packages accessible via unique 8-character access code"
+    },
+    "/activity/{activityId}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "User activity and audit events"
+    }
+  }
+}

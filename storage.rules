@@ -1,0 +1,27 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Default deny catch-all
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // Users private files
+    match /users/{userId}/files/{fileName=**} {
+      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if (request.auth != null && request.auth.uid == userId) || resource.metadata.isShared == 'true';
+    }
+
+    // QuickDrop temporary shared bundles
+    match /quickdrop/{userId}/{token=**} {
+      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if true;
+    }
+
+    // Packages files
+    match /packages/{packageId}/{fileName=**} {
+      allow write: if request.auth != null;
+      allow read: if true;
+    }
+  }
+}

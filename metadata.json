@@ -1,0 +1,6 @@
+{
+  "name": "INFCLOUD",
+  "description": "A high-capacity, secure cloud storage web application featuring real-time file management, preview, sharing, and intelligent quota monitoring.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
